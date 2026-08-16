@@ -3,61 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Orbit · idea space</title>
-<meta name="description" content="A floating brainstorm space for project ideas, with anticipated dates and countdowns.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='30' fill='none' stroke='%23a78bfa' stroke-width='8'/><circle cx='50' cy='14' r='9' fill='%2367e8f9'/></svg>">
+<title>Orbit</title>
+<meta name="description" content="A quiet space for project ideas and the dates you're aiming at.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='7' fill='none' stroke='%23111' stroke-width='2'/></svg>">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<div class="aurora" aria-hidden="true">
-  <span class="blob b1"></span>
-  <span class="blob b2"></span>
-  <span class="blob b3"></span>
-  <span class="grain"></span>
-</div>
-
 <header class="topbar">
   <div class="brand">
-    <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
-      <ellipse cx="50" cy="50" rx="34" ry="16" transform="rotate(-24 50 50)"/>
-      <circle cx="50" cy="50" r="11" class="core"/>
-      <circle cx="79" cy="35" r="6" class="moon"/>
-    </svg>
-    <div class="brand-text">
-      <h1>Orbit</h1>
-      <p>your ideas, in motion</p>
-    </div>
-  </div>
-
-  <div class="stats" id="stats">
-    <div class="stat"><span class="k" id="statTotal">0</span><span class="l">ideas</span></div>
-    <div class="stat"><span class="k warn" id="statSoon">0</span><span class="l">due in 7d</span></div>
-    <div class="stat"><span class="k bad" id="statLate">0</span><span class="l">overdue</span></div>
-    <div class="stat next" id="statNextWrap"><span class="k" id="statNext">—</span><span class="l">next up</span></div>
+    <h1>Orbit</h1>
+    <p class="stats">
+      <span id="statTotal">0</span> ideas
+      <span class="sep">·</span>
+      <span id="statSoon">0</span> this week
+      <span class="sep">·</span>
+      <span id="statLate" class="late-count">0</span> overdue
+    </p>
   </div>
 
   <div class="controls">
-    <label class="search">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
-      <input id="search" type="search" placeholder="Search ideas…" autocomplete="off" spellcheck="false">
-    </label>
+    <input id="search" class="search" type="search" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search ideas">
 
-    <div class="segmented" role="tablist" aria-label="View">
-      <button role="tab" class="seg active" data-view="float" aria-selected="true">Float</button>
-      <button role="tab" class="seg" data-view="timeline" aria-selected="false">Timeline</button>
+    <div class="views" role="tablist" aria-label="View">
+      <button role="tab" class="view active" data-view="float" aria-selected="true">Float</button>
+      <button role="tab" class="view" data-view="timeline" aria-selected="false">Timeline</button>
     </div>
 
     <div class="menu-wrap">
-      <button class="icon-btn" id="menuBtn" aria-label="More options" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
-      </button>
+      <button class="more" id="menuBtn" aria-label="More options" aria-haspopup="true" aria-expanded="false">···</button>
       <div class="menu" id="menu" hidden>
-        <button data-act="export">Export JSON</button>
-        <button data-act="import">Import JSON</button>
-        <button data-act="shuffle">Shuffle orbit</button>
-        <button data-act="wipe" class="danger">Delete all ideas</button>
+        <button data-act="export">Export</button>
+        <button data-act="import">Import</button>
+        <button data-act="shuffle">Rearrange</button>
+        <button data-act="wipe">Delete all</button>
       </div>
     </div>
   </div>
@@ -65,63 +44,42 @@
 
 <nav class="filters" id="filters">
   <button class="chip active" data-filter="all">All</button>
-  <button class="chip" data-filter="spark" data-dot="spark">Spark</button>
-  <button class="chip" data-filter="brewing" data-dot="brewing">Brewing</button>
-  <button class="chip" data-filter="building" data-dot="building">Building</button>
-  <button class="chip" data-filter="shipped" data-dot="shipped">Shipped</button>
-  <button class="chip" data-filter="parked" data-dot="parked">Parked</button>
+  <button class="chip" data-filter="spark">Spark</button>
+  <button class="chip" data-filter="brewing">Brewing</button>
+  <button class="chip" data-filter="building">Building</button>
+  <button class="chip" data-filter="shipped">Shipped</button>
+  <button class="chip" data-filter="parked">Parked</button>
   <span class="filters-sep"></span>
-  <button class="chip ghost" data-filter="dated">Has a date</button>
-  <button class="chip ghost" data-filter="undated">No date yet</button>
+  <button class="chip" data-filter="dated">Dated</button>
+  <button class="chip" data-filter="undated">Undated</button>
 </nav>
 
 <main>
   <section id="stage" class="stage" aria-label="Floating ideas"></section>
-
   <section id="timeline" class="timeline" aria-label="Timeline" hidden></section>
 
   <div class="empty" id="empty" hidden>
-    <div class="empty-inner">
-      <div class="empty-orb"></div>
-      <h2>Nothing in orbit yet</h2>
-      <p>Drop your first idea in the composer below. Try <code>Study app @in 3 weeks #school</code></p>
-    </div>
+    <p>Nothing here yet.</p>
+    <p class="dim">Add one below — try <code>Study app @in 3 weeks #school</code></p>
   </div>
 </main>
 
 <form class="composer" id="composer" autocomplete="off">
-  <div class="composer-glow" aria-hidden="true"></div>
-  <span class="plus" aria-hidden="true">
-    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-  </span>
-  <input id="quickAdd" type="text" placeholder="New idea…  use @date for timing, #tag to label" aria-label="New idea">
-  <div class="composer-hints" id="composerHints" aria-live="polite"></div>
-  <button type="submit" class="add-btn">
-    Add
-    <kbd>↵</kbd>
-  </button>
+  <input id="quickAdd" type="text" placeholder="New idea" aria-label="New idea">
+  <span class="hints" id="composerHints"></span>
+  <button type="submit" class="add">Add</button>
 </form>
 
-<p class="hotkeys">
-  <kbd>N</kbd> new idea · <kbd>/</kbd> search · <kbd>Esc</kbd> close · drag the bubbles
-</p>
-
-<!-- Idea detail / editor -->
 <div class="modal-root" id="modalRoot" hidden>
   <div class="modal-scrim" data-close></div>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
-    <button class="modal-close" data-close aria-label="Close">
-      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
+    <button class="modal-close" data-close aria-label="Close">×</button>
 
-    <div class="modal-head">
-      <span class="modal-eyebrow" id="mEyebrow">Idea</span>
-      <input id="mTitle" class="modal-title" placeholder="Untitled idea">
-    </div>
+    <input id="mTitle" class="modal-title" placeholder="Untitled idea">
 
     <label class="field">
       <span class="field-label">Notes</span>
-      <textarea id="mNote" rows="4" placeholder="What is it? Why does it matter? First step?"></textarea>
+      <textarea id="mNote" rows="4" placeholder="What is it? First step?"></textarea>
     </label>
 
     <div class="field-row">
@@ -146,21 +104,20 @@
       <button type="button" data-days="14">+2 weeks</button>
       <button type="button" data-days="30">+1 month</button>
       <button type="button" data-days="90">+1 quarter</button>
-      <button type="button" data-days="clear">No date</button>
+      <button type="button" data-days="clear">Clear</button>
     </div>
 
     <label class="field">
-      <span class="field-label">Tags <em>comma separated</em></span>
+      <span class="field-label">Tags</span>
       <input id="mTags" placeholder="school, ai, weekend">
     </label>
 
-    <div class="countdown" id="mCountdown"></div>
+    <p class="countdown" id="mCountdown"></p>
 
     <div class="modal-foot">
-      <button class="btn danger ghost" id="mDelete">Delete</button>
-      <div class="grow"></div>
-      <span class="meta" id="mMeta"></span>
-      <button class="btn primary" id="mSave">Save</button>
+      <button class="btn quiet" id="mDelete">Delete</button>
+      <span class="grow"></span>
+      <button class="btn" id="mSave">Save</button>
     </div>
   </div>
 </div>

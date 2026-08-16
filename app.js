@@ -11,11 +11,11 @@
   const SEEDED_KEY = 'orbit.seeded.v1';
 
   const STATUSES = {
-    spark:    { label: 'Spark',    color: '#fbbf24' },
-    brewing:  { label: 'Brewing',  color: '#a78bfa' },
-    building: { label: 'Building', color: '#67e8f9' },
-    shipped:  { label: 'Shipped',  color: '#4ade80' },
-    parked:   { label: 'Parked',   color: '#94a3b8' },
+    spark:    'Spark',
+    brewing:  'Brewing',
+    building: 'Building',
+    shipped:  'Shipped',
+    parked:   'Parked',
   };
 
   const MONTHS = ['January','February','March','April','May','June',
@@ -90,15 +90,9 @@
     return `in ${(n / 365).toFixed(1)} years`;
   };
 
-  /** urgency bucket used for colour coding */
-  const urgency = (idea) => {
-    if (!idea.date) return 'none';
-    if (idea.status === 'shipped') return 'done';
-    const n = daysUntil(idea.date);
-    if (n < 0) return 'late';
-    if (n <= 7) return 'soon';
-    return 'ok';
-  };
+  /** the one thing worth flagging in colour */
+  const isLate = (idea) =>
+    Boolean(idea.date) && idea.status !== 'shipped' && daysUntil(idea.date) < 0;
 
   /* ---------------------------------------------------------
      Natural-language date parsing for the composer (@…)
@@ -341,7 +335,7 @@
 
   const nodes = new Map();   // id -> { el, x, y, vx, vy, w, h, scale, targetScale, hover, dragging }
   const PAD = 14;
-  const BOTTOM_KEEPOUT = 120; // leave the composer some breathing room
+  const BOTTOM_KEEPOUT = 92; // leave the composer some breathing room
 
   function bounds() {
     return {
@@ -351,28 +345,18 @@
   }
 
   function bubbleMarkup(idea) {
-    const s = STATUSES[idea.status];
-    const u = urgency(idea);
-    const dateChip = idea.date
-      ? `<span class="b-date ${u}">
-           <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
-           ${relative(idea.date)} · ${formatDate(idea.date)}
-         </span>`
-      : `<span class="b-date none">
-           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-           someday
-         </span>`;
+    const date = idea.date
+      ? `<span class="b-date${isLate(idea) ? ' late' : ''}" title="${formatDate(idea.date)}">${relative(idea.date)}</span>`
+      : `<span class="b-date">Someday</span>`;
+    const tags = idea.tags.slice(0, 2).map((t) => '#' + esc(t)).join(' ');
 
     return `
-      <div class="b-top">
-        <span class="b-status"></span>
-        <span class="b-status-label">${s.label}</span>
-      </div>
+      <div class="b-status">${STATUSES[idea.status]}</div>
       <h3 class="b-title">${esc(idea.title)}</h3>
       ${idea.note ? `<p class="b-note">${esc(idea.note)}</p>` : ''}
       <div class="b-foot">
-        ${dateChip}
-        ${idea.tags.slice(0, 2).map((t) => `<span class="b-tag">#${esc(t)}</span>`).join('')}
+        ${date}
+        ${tags ? `<span class="b-tags">${tags}</span>` : ''}
       </div>`;
   }
 
@@ -409,8 +393,6 @@
     el.className = 'bubble';
     el.dataset.id = idea.id;
     el.innerHTML = bubbleMarkup(idea);
-    el.style.setProperty('--accent', STATUSES[idea.status].color);
-    el.classList.toggle('urgent', urgency(idea) === 'late');
     stage.appendChild(el);
 
     const b = bounds();
@@ -470,8 +452,6 @@
         createNode(idea, idea.id === spawnedId, spots[spotIndex++]);
       } else {
         existing.el.innerHTML = bubbleMarkup(idea);
-        existing.el.style.setProperty('--accent', STATUSES[idea.status].color);
-        existing.el.classList.toggle('urgent', urgency(idea) === 'late');
         existing.w = existing.el.offsetWidth;
         existing.h = existing.el.offsetHeight;
       }
@@ -626,18 +606,16 @@
       groups.get(key).push(idea);
     }
 
-    const nowKey = toKey(today()).slice(0, 7);
     let html = '<div class="tl-inner">';
     let index = 0;
 
     for (const [key, items] of groups) {
       const [y, m] = key.split('-').map(Number);
-      const late = key < nowKey || items.some((i) => urgency(i) === 'late');
       html += `
-        <div class="tl-group ${late ? 'is-late' : ''}">
+        <div class="tl-group">
           <div class="tl-group-head">
             <h3 class="tl-month">${MONTHS[m - 1]} ${y}</h3>
-            <span class="tl-count">${items.length} idea${items.length > 1 ? 's' : ''}</span>
+            <span class="tl-count">${items.length}</span>
           </div>
           ${items.map((i) => timelineCard(i, index++)).join('')}
         </div>`;
@@ -645,10 +623,10 @@
 
     if (undated.length) {
       html += `
-        <div class="tl-group is-none">
+        <div class="tl-group">
           <div class="tl-group-head">
             <h3 class="tl-month">Someday</h3>
-            <span class="tl-count">${undated.length} unscheduled</span>
+            <span class="tl-count">${undated.length}</span>
           </div>
           ${undated.map((i) => timelineCard(i, index++)).join('')}
         </div>`;
@@ -659,26 +637,21 @@
   }
 
   function timelineCard(idea, index) {
-    const s = STATUSES[idea.status];
-    const u = urgency(idea);
+    const late = isLate(idea);
     const d = fromKey(idea.date);
-    const delay = Math.min(index * 22, 420);
+    const delay = Math.min(index * 18, 300);
+    const sub = idea.note || idea.tags.map((t) => '#' + t).join(' ');
 
     return `
-      <div class="tl-card" data-id="${idea.id}" style="--accent:${s.color}; animation-delay:${delay}ms">
-        <div class="tl-day">
-          ${d
-            ? `<span class="d">${d.getDate()}</span><span class="w">${DAY_ABBR[d.getDay()]}</span>`
-            : `<span class="d dash">·</span><span class="w">tbd</span>`}
-        </div>
+      <div class="tl-card" data-id="${idea.id}" style="animation-delay:${delay}ms">
+        <span class="tl-day${late ? ' late' : ''}">${d ? `${d.getDate()} ${DAY_ABBR[d.getDay()]}` : '—'}</span>
         <div class="tl-body">
           <h4>${esc(idea.title)}</h4>
-          <p>${idea.note ? esc(idea.note) : idea.tags.map((t) => '#' + esc(t)).join(' ') || 'No notes yet'}</p>
+          ${sub ? `<p>${esc(sub)}</p>` : ''}
         </div>
-        <div class="tl-right">
-          ${idea.date ? `<span class="b-date ${u}">${relative(idea.date)}</span>` : ''}
-          <span class="b-date" style="color:${s.color}; border-color:${s.color}44; background:${s.color}18">${s.label}</span>
-        </div>
+        <span class="tl-meta">
+          ${idea.date ? `<span class="${late ? 'late' : ''}">${relative(idea.date)}</span> · ` : ''}${STATUSES[idea.status]}
+        </span>
       </div>`;
   }
 
@@ -708,16 +681,12 @@
   function renderStats() {
     const live = ideas.filter((i) => i.status !== 'shipped');
     const soon = live.filter((i) => i.date && daysUntil(i.date) >= 0 && daysUntil(i.date) <= 7);
-    const late = live.filter((i) => i.date && daysUntil(i.date) < 0);
-    const upcoming = live
-      .filter((i) => i.date && daysUntil(i.date) >= 0)
-      .sort((a, b) => a.date.localeCompare(b.date))[0];
+    const late = live.filter((i) => isLate(i));
 
     $('#statTotal').textContent = ideas.length;
     $('#statSoon').textContent = soon.length;
     $('#statLate').textContent = late.length;
-    $('#statNext').textContent = upcoming ? `${upcoming.title} · ${relative(upcoming.date)}` : '—';
-    $('#statNextWrap').title = upcoming ? `${upcoming.title} — ${formatDate(upcoming.date)}` : 'Nothing scheduled';
+    $('#statLate').classList.toggle('on', late.length > 0);
   }
 
   /* ---------------------------------------------------------
@@ -753,14 +722,14 @@
 
   function updateHints() {
     const raw = quickAdd.value;
-    if (!raw.trim()) { hintsEl.innerHTML = ''; return; }
+    if (!raw.trim()) { hintsEl.textContent = ''; return; }
 
     const draft = parseInput(raw);
-    let html = '';
-    if (draft.date) html += `<span class="hint-pill">${formatDate(draft.date)} · ${relative(draft.date)}</span>`;
-    if (draft.status !== 'spark') html += `<span class="hint-pill tag">${STATUSES[draft.status].label}</span>`;
-    if (draft.tags.length) html += `<span class="hint-pill tag">#${esc(draft.tags.join(' #'))}</span>`;
-    hintsEl.innerHTML = html;
+    const bits = [];
+    if (draft.date) bits.push(`${formatDate(draft.date)} · ${relative(draft.date)}`);
+    if (draft.status !== 'spark') bits.push(STATUSES[draft.status]);
+    if (draft.tags.length) bits.push('#' + draft.tags.join(' #'));
+    hintsEl.textContent = bits.join('  ·  ');
   }
 
   /* ---------------------------------------------------------
@@ -784,9 +753,6 @@
     mDate.value = idea.date || '';
     mStatus.value = idea.status;
     mTags.value = idea.tags.join(', ');
-    $('#mEyebrow').textContent = STATUSES[idea.status].label;
-    $('#mMeta').textContent = 'Created ' + new Date(idea.createdAt).toLocaleDateString();
-    $('.modal').style.setProperty('--accent', STATUSES[idea.status].color);
 
     updateCountdown();
     modalRoot.hidden = false;
@@ -800,21 +766,14 @@
 
   function updateCountdown() {
     const key = mDate.value;
-    if (!key) { mCountdown.className = 'countdown'; mCountdown.innerHTML = ''; return; }
-    const n = daysUntil(key);
-    const bucket = n < 0 ? 'late' : n <= 7 ? 'soon' : 'far';
+    if (!key) { mCountdown.className = 'countdown'; mCountdown.textContent = ''; return; }
     const d = fromKey(key);
-    mCountdown.className = `countdown show ${bucket}`;
-    mCountdown.innerHTML = `
-      <span class="big">${relative(key)}</span>
-      <span class="sub">${DAY_ABBR[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}</span>`;
+    mCountdown.className = `countdown${daysUntil(key) < 0 ? ' late' : ''}`;
+    mCountdown.textContent =
+      `${relative(key)} — ${DAY_ABBR[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
   }
 
   mDate.addEventListener('input', updateCountdown);
-  mStatus.addEventListener('change', () => {
-    $('#mEyebrow').textContent = STATUSES[mStatus.value].label;
-    $('.modal').style.setProperty('--accent', STATUSES[mStatus.value].color);
-  });
 
   $('#quickDates').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -857,9 +816,9 @@
      Views, filters, search
      --------------------------------------------------------- */
 
-  $$('.seg').forEach((btn) => {
+  $$('.view').forEach((btn) => {
     btn.addEventListener('click', () => {
-      $$('.seg').forEach((b) => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+      $$('.view').forEach((b) => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
       btn.classList.add('active');
       btn.setAttribute('aria-selected', 'true');
       view = btn.dataset.view;

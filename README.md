@@ -1,7 +1,10 @@
-# Orbit — idea space
+# Orbit
 
-A brainstorming board where project ideas drift around a dark, aurora-lit canvas. Add an
-idea in one line, give it an anticipated date, and watch the countdowns keep you honest.
+A brainstorming board where project ideas drift around a quiet canvas. Add an idea in one
+line, give it an anticipated date, and let the countdowns keep you honest.
+
+Deliberately minimal: monochrome, hairline borders, no shadows or gradients, and a single
+accent colour reserved for one thing — overdue. It follows your OS light/dark setting.
 
 No build step, no dependencies, no server — three files and `localStorage`. Nothing ever
 leaves the browser.
@@ -36,9 +39,9 @@ Course scheduler that respects sleep @in 3 weeks #school #ai !brewing
 
 Every idea can carry an **anticipated date**. Orbit turns that into:
 
-- a live countdown chip on the bubble — `in 5 days`, `Today`, `3 days late`
-- colour coding — amber inside 7 days, red once overdue (with a slow pulse), green once shipped
-- header stats — how many land this week, how many are overdue, and what's next up
+- a live countdown on the card — `in 5 days`, `Today`, `3 days late` (hover for the exact date)
+- one accent: overdue turns red, everything else stays grey
+- header stats — how many ideas, how many land this week, how many are overdue
 - a **Timeline** view grouping every idea by month, with `Someday` at the end for the undated
 
 In the editor, `+1 week` / `+2 weeks` / `+1 month` / `+1 quarter` set a date in one click.
@@ -48,7 +51,7 @@ In the editor, `+1 week` / `+2 weeks` / `+1 month` / `+1 quarter` set a date in 
 - **Click** a bubble to open the editor · **drag** it to fling it across the field
 - Bubbles gently repel each other, slow down when hovered, and bounce off the edges
 - Filter by status, or by whether an idea has a date · search titles, notes and tags
-- `⋯` menu: export JSON, import JSON, reshuffle the orbit, delete everything (undoable)
+- `⋯` menu: export, import, rearrange the field, delete everything (undoable)
 
 ### Keyboard
 
@@ -68,12 +71,12 @@ or machines. Import merges by id: matching ideas are updated, new ones are added
 whole import can be undone from the toast.
 
 The board is seeded with five example ideas on first visit. Delete them from the editor, or
-use `⋯ → Delete all ideas` to start clean.
+use `⋯ → Delete all` to start clean.
 
 ## Files
 
 ```
 index.html   structure
-styles.css   aurora background, glass bubbles, timeline, modal
+styles.css   monochrome tokens (light + dark), cards, timeline, modal
 app.js       state, date parsing, physics loop, rendering
 ```
