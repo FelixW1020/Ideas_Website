@@ -569,3 +569,6 @@ main {
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition-duration: 0.01ms !important; }
 }
+
+/* shown only when the backend isn't reachable */
+.local-only { color: var(--ink-3); font-style: italic; }

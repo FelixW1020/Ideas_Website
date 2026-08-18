@@ -1,14 +1,14 @@
 /* ============================================================
    Orbit — idea space
    A floating brainstorm board with anticipated dates.
-   Everything lives in localStorage; nothing leaves the browser.
+   Talks to server.js; falls back to localStorage when it's absent.
    ============================================================ */
 
 (() => {
   'use strict';
 
-  const STORE_KEY = 'orbit.ideas.v1';
-  const SEEDED_KEY = 'orbit.seeded.v1';
+  const API = '/api/ideas';
+  const CACHE_KEY = 'orbit.cache.v2';
 
   const STATUSES = {
     spark:    'Spark',
@@ -238,43 +238,13 @@
      State
      --------------------------------------------------------- */
 
-  const SEED = [
-    { title: 'Portfolio site redesign', note: 'Rebuild with a case-study layout. Motion on scroll, dark first.', status: 'building', tags: ['web', 'design'], offset: 12 },
-    { title: 'Course scheduler that respects sleep', note: 'Optimise a semester schedule around energy levels, not just conflicts.', status: 'brewing', tags: ['school', 'ai'], offset: 34 },
-    { title: 'Weekly review automation', note: 'Pull commits, notes and calendar into one Sunday digest.', status: 'spark', tags: ['tools'], offset: 6 },
-    { title: 'Film photo archive', note: 'Scan and tag every roll from the last two years.', status: 'parked', tags: ['personal'], offset: null },
-    { title: 'Trading journal analytics', note: 'Tag every trade with a thesis, then chart which theses actually work.', status: 'spark', tags: ['finance'], offset: 60 },
-  ];
-
-  let ideas = load();
+  let ideas = [];
   let view = 'float';
   let filter = 'all';
   let query = '';
   let editingId = null;
   let lastSnapshot = null;
-
-  function load() {
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed.map(normalize);
-      }
-    } catch (err) {
-      console.warn('[orbit] could not read saved ideas:', err);
-    }
-    // First visit: plant a few examples so the space isn't empty.
-    if (!localStorage.getItem(SEEDED_KEY)) {
-      localStorage.setItem(SEEDED_KEY, '1');
-      return SEED.map((s) =>
-        normalize({
-          ...s,
-          date: s.offset === null ? null : toKey(addDays(today(), s.offset)),
-        })
-      );
-    }
-    return [];
-  }
+  let online = false;
 
   function normalize(raw) {
     return {
@@ -288,13 +258,93 @@
     };
   }
 
-  function save() {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(ideas));
-    } catch (err) {
-      toast('Could not save — storage is full or blocked.');
-      console.error('[orbit] save failed:', err);
+  /* ---------------------------------------------------------
+     Persistence
+
+     server.js is the source of truth. If it isn't reachable —
+     someone opened index.html straight off disk — Orbit falls
+     back to localStorage so the board still works.
+     --------------------------------------------------------- */
+
+  async function request(method, path = '', body) {
+    const res = await fetch(API + path, {
+      method,
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.error || `${method} ${API}${path} → ${res.status}`);
     }
+    return res.json();
+  }
+
+  /**
+   * Send a change that has already been applied to `ideas`.
+   * `before` is the array as it was, so a failed write can be undone.
+   */
+  async function persist(work, before) {
+    cacheLocally();
+    if (!online) return true;
+    try {
+      await work();
+      cacheLocally();
+      return true;
+    } catch (err) {
+      console.error('[orbit]', err);
+      if (before) { ideas = before; cacheLocally(); render(); }
+      toast('Server unreachable — that change was not saved.');
+      return false;
+    }
+  }
+
+  function cacheLocally() {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(ideas));
+    } catch (err) {
+      console.warn('[orbit] local cache failed:', err);
+    }
+  }
+
+  function loadCache() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
+      return Array.isArray(parsed) ? parsed.map(normalize) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function boot() {
+    // leftovers from the localStorage-only version
+    localStorage.removeItem('orbit.ideas.v1');
+    localStorage.removeItem('orbit.seeded.v1');
+
+    try {
+      ideas = (await request('GET')).ideas.map(normalize);
+      online = true;
+      cacheLocally();
+    } catch {
+      ideas = loadCache();
+      $('#localOnly').hidden = false;
+      $('#localOnly').title = 'The backend is not running — changes stay in this browser.';
+    }
+
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  /** Another tab or device may have moved on while we were away. */
+  async function refresh() {
+    if (!online || !modalRoot.hidden || quickAdd.value.trim() || drag) return;
+    try {
+      const next = (await request('GET')).ideas.map(normalize);
+      if (JSON.stringify(next) !== JSON.stringify(ideas)) {
+        ideas = next;
+        cacheLocally();
+        render();
+      }
+    } catch { /* keep showing what we have */ }
   }
 
   const byId = (id) => ideas.find((i) => i.id === id);
@@ -705,12 +755,13 @@
     }
 
     const idea = normalize(draft);
-    ideas.unshift(idea);
-    save();
+    const before = ideas;
+    ideas = [idea, ...ideas];
     quickAdd.value = '';
     updateHints();
     render(idea.id);
     toast(`Added “${idea.title}”${idea.date ? ' · ' + relative(idea.date) : ''}`);
+    persist(() => request('POST', '', idea), before);
   });
 
   quickAdd.addEventListener('input', updateHints);
@@ -784,28 +835,36 @@
   });
 
   $('#mSave').addEventListener('click', () => {
-    const idea = byId(editingId);
-    if (!idea) return closeModal();
-    idea.title = mTitle.value.trim() || 'Untitled idea';
-    idea.note = mNote.value.trim();
-    idea.date = mDate.value || null;
-    idea.status = mStatus.value;
-    idea.tags = mTags.value.split(',').map((t) => t.trim().replace(/^#/, '')).filter(Boolean);
-    save();
+    const current = byId(editingId);
+    if (!current) return closeModal();
+
+    const patch = {
+      title: mTitle.value.trim() || 'Untitled idea',
+      note: mNote.value.trim(),
+      date: mDate.value || null,
+      status: mStatus.value,
+      tags: mTags.value.split(',').map((t) => t.trim().replace(/^#/, '')).filter(Boolean),
+    };
+    const updated = { ...current, ...patch };
+
+    const before = ideas;
+    ideas = ideas.map((i) => (i.id === updated.id ? updated : i));
     closeModal();
     render();
     toast('Saved');
+    persist(() => request('PATCH', '/' + encodeURIComponent(updated.id), patch), before);
   });
 
   $('#mDelete').addEventListener('click', () => {
     const idea = byId(editingId);
     if (!idea) return closeModal();
     snapshot();
+    const before = ideas;
     ideas = ideas.filter((i) => i.id !== idea.id);
-    save();
     closeModal();
     render();
     toast(`Deleted “${idea.title}”`, 'Undo');
+    persist(() => request('DELETE', '/' + encodeURIComponent(idea.id)), before);
   });
 
   modalRoot.addEventListener('click', (e) => {
@@ -877,11 +936,12 @@
     if (act === 'wipe') {
       if (!ideas.length) return toast('Nothing to delete.');
       snapshot();
+      const before = ideas;
       const n = ideas.length;
       ideas = [];
-      save();
       render();
       toast(`Deleted ${n} idea${n > 1 ? 's' : ''}`, 'Undo');
+      persist(() => request('DELETE'), before);
     }
   });
 
@@ -903,16 +963,19 @@
       const parsed = JSON.parse(await file.text());
       if (!Array.isArray(parsed)) throw new Error('not a list of ideas');
       snapshot();
+      const before = ideas;
+      const next = ideas.slice();
       let added = 0, updated = 0;
       for (const raw of parsed) {
         const idea = normalize(raw);
-        const existing = ideas.findIndex((i) => i.id === idea.id);
-        if (existing >= 0) { ideas[existing] = idea; updated++; }
-        else { ideas.unshift(idea); added++; }
+        const at = next.findIndex((i) => i.id === idea.id);
+        if (at >= 0) { next[at] = idea; updated++; }
+        else { next.unshift(idea); added++; }
       }
-      save();
+      ideas = next;
       render();
       toast(`Imported ${added} new, ${updated} updated`, 'Undo');
+      persist(() => request('PUT', '', { ideas }), before);
     } catch (err) {
       console.error('[orbit] import failed:', err);
       toast("That file didn't look like an Orbit export.");
@@ -952,12 +1015,13 @@
     if (actionLabel) {
       $('.u', toastEl).addEventListener('click', () => {
         if (!lastSnapshot) return;
+        const before = ideas;
         ideas = lastSnapshot.map(normalize);
         lastSnapshot = null;
-        save();
         render();
         toastEl.hidden = true;
         toast('Restored');
+        persist(() => request('PUT', '', { ideas }), before);
       });
     }
     toastTimer = setTimeout(() => { toastEl.hidden = true; }, actionLabel ? 6500 : 2600);
@@ -1014,8 +1078,8 @@
      Go
      --------------------------------------------------------- */
 
-  render();
-  requestAnimationFrame(tick);
+  boot();
+  window.addEventListener('focus', refresh);
 
   // Countdowns are relative — refresh them if the tab is left open past midnight.
   let lastDayStamp = toKey(today());

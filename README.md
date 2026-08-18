@@ -6,19 +6,23 @@ line, give it an anticipated date, and let the countdowns keep you honest.
 Deliberately minimal: monochrome, hairline borders, no shadows or gradients, and a single
 accent colour reserved for one thing — overdue. It follows your OS light/dark setting.
 
-No build step, no dependencies, no server — three files and `localStorage`. Nothing ever
-leaves the browser.
+No build step and no dependencies — a small Node backend, a JSON file, and three static
+files. It binds to localhost, so nothing leaves your machine.
 
 ## Run it
 
-Open `index.html` in a browser. That's it.
-
-Optionally serve it locally:
-
 ```bash
-python3 -m http.server 8000
-# → http://localhost:8000
+npm start          # → http://127.0.0.1:3000
 ```
+
+Or `node server.js`. `PORT` and `HOST` are respected; `npm run dev` restarts on file
+changes.
+
+Ideas live in `data/ideas.json`, which is created on first write and is gitignored — your
+ideas stay out of the repo. Back it up by copying that file, or with **Export**.
+
+Opening `index.html` straight off disk still works: with no backend to talk to, Orbit falls
+back to `localStorage` and shows *local only* in the header.
 
 ## The composer
 
@@ -63,20 +67,47 @@ In the editor, `+1 week` / `+2 weeks` / `+1 month` / `+1 quarter` set a date in 
 | `⌘/Ctrl + Enter` | save from inside the editor |
 | `Esc` | close the editor |
 
+## API
+
+The backend is a plain REST API over one JSON file — no database, no ORM, no npm install.
+
+| Method | Path | Does |
+|---|---|---|
+| `GET` | `/api/ideas` | list every idea |
+| `POST` | `/api/ideas` | create one |
+| `PUT` | `/api/ideas` | replace the whole collection (used by import and undo) |
+| `DELETE` | `/api/ideas` | delete everything |
+| `PATCH` | `/api/ideas/:id` | update one — only the fields you send |
+| `DELETE` | `/api/ideas/:id` | delete one |
+| `GET` | `/api/health` | `{ ok, count }` |
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/ideas \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Read more papers","date":"2026-09-01","status":"spark","tags":["research"]}'
+```
+
+Every field is validated and clamped server-side, so a bad request can't corrupt the store.
+A malformed field in a `PATCH` is ignored rather than reset. Writes are serialised and land
+via `rename()`, so the file is never left half-written.
+
+Writes from the UI are optimistic: the change shows up instantly, and if the server can't be
+reached it rolls back with a toast rather than pretending it saved.
+
 ## Data
 
-Ideas are stored under the `orbit.ideas.v1` key in `localStorage`, so they live in whichever
-browser you use. **Export JSON** is the backup — and the way to move ideas between browsers
-or machines. Import merges by id: matching ideas are updated, new ones are added, and the
-whole import can be undone from the toast.
+Ideas live in `data/ideas.json` — readable, greppable, easy to back up. **Export** writes the
+same shape, and **Import** merges it back by id (matching ideas updated, new ones added,
+undoable from the toast).
 
-The board is seeded with five example ideas on first visit. Delete them from the editor, or
-use `⋯ → Delete all` to start clean.
+The board starts empty. `⋯ → Delete all` clears it, and that's undoable too.
 
 ## Files
 
 ```
+server.js    static server + REST API + JSON store
 index.html   structure
 styles.css   monochrome tokens (light + dark), cards, timeline, modal
 app.js       state, date parsing, physics loop, rendering
+data/        your ideas (gitignored, created on first write)
 ```

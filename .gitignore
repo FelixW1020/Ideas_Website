@@ -4,3 +4,6 @@ node_modules/
 .vscode/
 .idea/
 orbit-ideas-*.json
+
+# local idea store
+data/
